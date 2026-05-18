@@ -1,0 +1,28 @@
+{
+  "name": "@alibaba/open-code-review",
+  "version": "0.2.2",
+  "description": "OpenCodeReview CLI — AI-powered code review tool",
+  "bin": {
+    "ocr": "bin/ocr.js"
+  },
+  "scripts": {
+    "postinstall": "node scripts/install.js",
+    "prepublishOnly": "cp NPM-README.md README.md",
+    "postpublish": "git checkout README.md"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/alibaba/open-code-review.git"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "ocrConfig": {
+    "urlPattern": "https://github.com/alibaba/open-code-review/releases/download/v{version}/opencodereview-{os}-{arch}",
+    "checksumPattern": "https://github.com/alibaba/open-code-review/releases/download/v{version}/sha256sum.txt"
+  },
+  "engines": {
+    "node": ">=14"
+  },
+  "license": "Apache-2.0"
+}

@@ -1,0 +1,17 @@
+cmd/
+internal/
+dist/
+pages/
+Makefile
+go.mod
+go.sum
+scripts/hooks/
+.claude/
+.git/
+.idea/
+.github/
+.gitignore
+.ossutil_checkpoint/
+publish-strategy.md
+opencodereview
+CLAUDE.md
