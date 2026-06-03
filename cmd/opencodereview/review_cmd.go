@@ -153,16 +153,18 @@ func runReview(args []string) error {
 		return outputJSONNoFiles()
 	}
 
-	// In agent mode, restore stdout so Summary reaches the terminal.
-	if opts.audience == "agent" && unsilence != nil {
+	// In agent mode (text output), restore stdout so Summary reaches the terminal.
+	if opts.audience == "agent" && opts.outputFormat != "json" && unsilence != nil {
 		unsilence()
 		unsilence = nil
 	}
 
-	telemetry.PrintTraceSummary(ag.FilesReviewed(), int64(len(comments)), ag.TotalInputTokens(), ag.TotalOutputTokens(), ag.TotalTokensUsed(), duration)
+	if opts.outputFormat != "json" {
+		telemetry.PrintTraceSummary(ag.FilesReviewed(), int64(len(comments)), ag.TotalInputTokens(), ag.TotalOutputTokens(), ag.TotalTokensUsed(), duration)
+	}
 
 	if opts.outputFormat == "json" {
-		return outputJSONWithWarnings(comments, ag.Warnings())
+		return outputJSONWithWarnings(comments, ag.Warnings(), ag.FilesReviewed(), ag.TotalInputTokens(), ag.TotalOutputTokens(), ag.TotalTokensUsed(), duration)
 	}
 	if opts.audience == "agent" {
 		outputTextWithWarnings(comments, ag.Warnings())

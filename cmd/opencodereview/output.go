@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/open-code-review/open-code-review/internal/agent"
 	"github.com/open-code-review/open-code-review/internal/model"
@@ -161,9 +162,19 @@ func buildDiffLines(comment model.LlmComment) []suggestdiff.DiffLine {
 	return suggestdiff.ComputeLineDiff(oldLines, newLines)
 }
 
+type jsonSummary struct {
+	FilesReviewed int64  `json:"files_reviewed"`
+	Comments      int64  `json:"comments"`
+	TotalTokens   int64  `json:"total_tokens"`
+	InputTokens   int64  `json:"input_tokens"`
+	OutputTokens  int64  `json:"output_tokens"`
+	Elapsed       string `json:"elapsed"`
+}
+
 type jsonOutput struct {
 	Status   string               `json:"status"`
 	Message  string               `json:"message,omitempty"`
+	Summary  *jsonSummary         `json:"summary,omitempty"`
 	Comments []model.LlmComment   `json:"comments"`
 	Warnings []agent.AgentWarning `json:"warnings,omitempty"`
 }
@@ -181,10 +192,19 @@ func outputJSON(comments []model.LlmComment) error {
 	return enc.Encode(out)
 }
 
-func outputJSONWithWarnings(comments []model.LlmComment, warnings []agent.AgentWarning) error {
+func outputJSONWithWarnings(comments []model.LlmComment, warnings []agent.AgentWarning,
+	filesReviewed, inputTokens, outputTokens, totalTokens int64, duration time.Duration) error {
 	out := jsonOutput{
 		Status:   "success",
 		Comments: comments,
+		Summary: &jsonSummary{
+			FilesReviewed: filesReviewed,
+			Comments:      int64(len(comments)),
+			TotalTokens:   totalTokens,
+			InputTokens:   inputTokens,
+			OutputTokens:  outputTokens,
+			Elapsed:       duration.Round(time.Second).String(),
+		},
 	}
 	if len(comments) == 0 {
 		if hasSubtaskErrors(warnings) {
