@@ -1,6 +1,7 @@
 package tool
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
@@ -14,7 +15,7 @@ type CodeCommentProvider struct {
 
 func (p *CodeCommentProvider) Tool() Tool { return CodeComment }
 
-func (p *CodeCommentProvider) Execute(args map[string]any) (string, error) {
+func (p *CodeCommentProvider) Execute(_ context.Context, args map[string]any) (string, error) {
 	if p.Collector == nil {
 		return "Error: comment collector is not configured", nil
 	}

@@ -1,6 +1,7 @@
 package tool
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -114,7 +115,7 @@ func getHeadCommit(t *testing.T, dir string) string {
 func TestGitGrep_WorkspaceMode_Found(t *testing.T) {
 	dir := setupTestRepo(t)
 	p := NewCodeSearch(&FileReader{RepoDir: dir, Ref: "", Mode: ModeWorkspace})
-	result, err := p.gitGrep("Hello", false, false, nil)
+	result, err := p.gitGrep(context.Background(), "Hello", false, false, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,7 +127,7 @@ func TestGitGrep_WorkspaceMode_Found(t *testing.T) {
 func TestGitGrep_WorkspaceMode_NoMatch(t *testing.T) {
 	dir := setupTestRepo(t)
 	p := NewCodeSearch(&FileReader{RepoDir: dir, Ref: "", Mode: ModeWorkspace})
-	result, err := p.gitGrep("nonexistentXYZ", false, false, nil)
+	result, err := p.gitGrep(context.Background(), "nonexistentXYZ", false, false, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -139,7 +140,7 @@ func TestGitGrep_CommitMode_Found(t *testing.T) {
 	dir := setupTestRepo(t)
 	commit := getHeadCommit(t, dir)
 	p := NewCodeSearch(&FileReader{RepoDir: dir, Ref: commit, Mode: ModeCommit})
-	result, err := p.gitGrep("Hello", false, false, nil)
+	result, err := p.gitGrep(context.Background(), "Hello", false, false, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -155,7 +156,7 @@ func TestGitGrep_CommitMode_NoMatch(t *testing.T) {
 	dir := setupTestRepo(t)
 	commit := getHeadCommit(t, dir)
 	p := NewCodeSearch(&FileReader{RepoDir: dir, Ref: commit, Mode: ModeCommit})
-	result, err := p.gitGrep("nonexistentXYZ", false, false, nil)
+	result, err := p.gitGrep(context.Background(), "nonexistentXYZ", false, false, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -169,7 +170,7 @@ func TestGitGrep_CommitMode_WithPathspec(t *testing.T) {
 	commit := getHeadCommit(t, dir)
 	p := NewCodeSearch(&FileReader{RepoDir: dir, Ref: commit, Mode: ModeCommit})
 
-	result, err := p.gitGrep("Util", false, false, []string{"pkg/"})
+	result, err := p.gitGrep(context.Background(), "Util", false, false, []string{"pkg/"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -177,7 +178,7 @@ func TestGitGrep_CommitMode_WithPathspec(t *testing.T) {
 		t.Errorf("expected util.go in result, got: %s", result)
 	}
 
-	result2, err2 := p.gitGrep("Hello", false, false, []string{"pkg/"})
+	result2, err2 := p.gitGrep(context.Background(), "Hello", false, false, []string{"pkg/"})
 	if err2 != nil {
 		t.Fatal(err2)
 	}
@@ -191,7 +192,7 @@ func TestGitGrep_CommitMode_WithBadPathspec(t *testing.T) {
 	commit := getHeadCommit(t, dir)
 	p := NewCodeSearch(&FileReader{RepoDir: dir, Ref: commit, Mode: ModeCommit})
 
-	result, err := p.gitGrep("Hello", false, false, []string{"nonexistent/"})
+	result, err := p.gitGrep(context.Background(), "Hello", false, false, []string{"nonexistent/"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -203,7 +204,7 @@ func TestGitGrep_CommitMode_WithBadPathspec(t *testing.T) {
 func TestGitGrep_LiteralWithRegexMetaChars(t *testing.T) {
 	dir := setupTestRepo(t)
 	p := NewCodeSearch(&FileReader{RepoDir: dir, Ref: "", Mode: ModeWorkspace})
-	result, err := p.gitGrep("Hello()", false, false, nil)
+	result, err := p.gitGrep(context.Background(), "Hello()", false, false, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -216,7 +217,7 @@ func TestGitGrep_CommitMode_LiteralWithRegexMetaChars(t *testing.T) {
 	dir := setupTestRepo(t)
 	commit := getHeadCommit(t, dir)
 	p := NewCodeSearch(&FileReader{RepoDir: dir, Ref: commit, Mode: ModeCommit})
-	result, err := p.gitGrep("Hello()", false, false, nil)
+	result, err := p.gitGrep(context.Background(), "Hello()", false, false, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -228,7 +229,7 @@ func TestGitGrep_CommitMode_LiteralWithRegexMetaChars(t *testing.T) {
 func TestGitGrep_InvalidRef_ReturnsError(t *testing.T) {
 	dir := setupTestRepo(t)
 	p := NewCodeSearch(&FileReader{RepoDir: dir, Ref: "nonexistent_ref_abc123", Mode: ModeCommit})
-	result, err := p.gitGrep("Hello", false, false, nil)
+	result, err := p.gitGrep(context.Background(), "Hello", false, false, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -240,7 +241,7 @@ func TestGitGrep_InvalidRef_ReturnsError(t *testing.T) {
 func TestGitGrep_PerlRegexp_InvalidPattern_ReturnsError(t *testing.T) {
 	dir := setupTestRepo(t)
 	p := NewCodeSearch(&FileReader{RepoDir: dir, Ref: "", Mode: ModeWorkspace})
-	result, err := p.gitGrep("(unclosed", false, true, nil)
+	result, err := p.gitGrep(context.Background(), "(unclosed", false, true, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

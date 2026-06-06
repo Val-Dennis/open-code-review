@@ -58,12 +58,12 @@ type FileReader struct {
 // resolved according to the active review mode.
 // - Workspace: reads directly from the filesystem.
 // - Range / Commit: uses `git show <Ref>:<path>` to read at the given ref.
-func (fr *FileReader) Read(path string) (string, error) {
+func (fr *FileReader) Read(ctx context.Context, path string) (string, error) {
 	switch fr.Mode {
 	case ModeWorkspace:
 		return fr.readFromDisk(path)
 	case ModeRange, ModeCommit:
-		return fr.readFromGitShow(path)
+		return fr.readFromGitShow(ctx, path)
 	default:
 		return fr.readFromDisk(path)
 	}
@@ -78,8 +78,8 @@ func (fr *FileReader) readFromDisk(path string) (string, error) {
 	return string(content), nil
 }
 
-func (fr *FileReader) readFromGitShow(path string) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+func (fr *FileReader) readFromGitShow(parentCtx context.Context, path string) (string, error) {
+	ctx, cancel := context.WithTimeout(parentCtx, 30*time.Second)
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, "git", "-c", "core.quotepath=false", "show", fr.Ref+":"+path)

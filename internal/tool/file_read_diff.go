@@ -1,6 +1,9 @@
 package tool
 
-import "strings"
+import (
+	"context"
+	"strings"
+)
 
 // FileReadDiffProvider retrieves diff content by file path from an already-parsed diff set.
 // Translated from Java FileReadDiffTool — uses the existing diff parser instead of
@@ -15,7 +18,7 @@ func NewFileReadDiff() *FileReadDiffProvider {
 
 func (p *FileReadDiffProvider) Tool() Tool { return FileReadDiff }
 
-func (p *FileReadDiffProvider) Execute(args map[string]any) (string, error) {
+func (p *FileReadDiffProvider) Execute(_ context.Context, args map[string]any) (string, error) {
 	pathArray, _ := args["path_array"].([]any)
 	if len(pathArray) == 0 {
 		return "Error: no files found", nil

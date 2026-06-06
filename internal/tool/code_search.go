@@ -3,6 +3,7 @@ package tool
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os/exec"
 	"strconv"
@@ -24,7 +25,7 @@ func NewCodeSearch(fr *FileReader) *CodeSearchProvider { return &CodeSearchProvi
 
 func (p *CodeSearchProvider) Tool() Tool { return CodeSearch }
 
-func (p *CodeSearchProvider) Execute(args map[string]any) (string, error) {
+func (p *CodeSearchProvider) Execute(ctx context.Context, args map[string]any) (string, error) {
 	searchText, _ := args["search_text"].(string)
 	caseSensitive, _ := args["case_sensitive"].(bool)
 	usePerlRegexp, _ := args["use_perl_regexp"].(bool)
@@ -41,7 +42,7 @@ func (p *CodeSearchProvider) Execute(args map[string]any) (string, error) {
 		return "Error: search_text is blank", nil
 	}
 
-	result, err := p.gitGrep(searchText, caseSensitive, usePerlRegexp, patterns)
+	result, err := p.gitGrep(ctx, searchText, caseSensitive, usePerlRegexp, patterns)
 	if err != nil {
 		return "", fmt.Errorf("code_search failed: %w", err)
 	}
@@ -75,8 +76,8 @@ func (p *CodeSearchProvider) buildGrepArgs(searchText string, caseSensitive bool
 	return cmdArgs
 }
 
-func (p *CodeSearchProvider) runGitGrep(cmdArgs []string) (string, string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), gitGrepTimeout)
+func (p *CodeSearchProvider) runGitGrep(parentCtx context.Context, cmdArgs []string) (string, string, error) {
+	ctx, cancel := context.WithTimeout(parentCtx, gitGrepTimeout)
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, "git", cmdArgs...)
@@ -87,20 +88,23 @@ func (p *CodeSearchProvider) runGitGrep(cmdArgs []string) (string, string, error
 	cmd.Stderr = &stderr
 
 	err := cmd.Run()
-	if ctx.Err() == context.DeadlineExceeded && err != nil && cmd.ProcessState != nil && cmd.ProcessState.ExitCode() == -1 {
-		return "", "", context.DeadlineExceeded
+	if ctx.Err() != nil && err != nil && cmd.ProcessState != nil && cmd.ProcessState.ExitCode() == -1 {
+		return "", "", ctx.Err()
 	}
 	return stdout.String(), stderr.String(), err
 }
 
-func (p *CodeSearchProvider) gitGrep(searchText string, caseSensitive bool, usePerlRegexp bool, pathspec []string) (string, error) {
+func (p *CodeSearchProvider) gitGrep(ctx context.Context, searchText string, caseSensitive bool, usePerlRegexp bool, pathspec []string) (string, error) {
 	cmdArgs := p.buildGrepArgs(searchText, caseSensitive, usePerlRegexp, pathspec)
 
-	outStr, errStr, err := p.runGitGrep(cmdArgs)
+	outStr, errStr, err := p.runGitGrep(ctx, cmdArgs)
 
 	if err != nil {
-		if err == context.DeadlineExceeded {
+		if errors.Is(err, context.DeadlineExceeded) {
 			return "code_search timed out. Try narrowing file_patterns to a more specific path.", nil
+		}
+		if errors.Is(err, context.Canceled) {
+			return "", err
 		}
 		if outStr == "" {
 			if errStr == "" {

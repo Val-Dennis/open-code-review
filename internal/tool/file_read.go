@@ -1,6 +1,7 @@
 package tool
 
 import (
+	"context"
 	"fmt"
 	"strings"
 )
@@ -16,7 +17,7 @@ func NewFileRead(fr *FileReader) *FileReadProvider { return &FileReadProvider{Fi
 
 func (p *FileReadProvider) Tool() Tool { return FileRead }
 
-func (p *FileReadProvider) Execute(args map[string]any) (string, error) {
+func (p *FileReadProvider) Execute(ctx context.Context, args map[string]any) (string, error) {
 	filePath, _ := args["file_path"].(string)
 	if filePath == "" {
 		return "Error: file_path is required", nil
@@ -31,7 +32,7 @@ func (p *FileReadProvider) Execute(args map[string]any) (string, error) {
 		endLine = 0 // means "to end of file"
 	}
 
-	content, err := p.FileReader.Read(filePath)
+	content, err := p.FileReader.Read(ctx, filePath)
 	if err != nil {
 		return "", fmt.Errorf("file %q not found: %w", filePath, err)
 	}

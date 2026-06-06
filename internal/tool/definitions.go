@@ -1,6 +1,9 @@
 package tool
 
-import "fmt"
+import (
+	"context"
+	"fmt"
+)
 
 // Tool represents a single review tool.
 type Tool struct {
@@ -50,7 +53,7 @@ type Provider interface {
 	// Tool returns which tool this provider implements.
 	Tool() Tool
 	// Execute runs the tool with the given arguments and returns the result string.
-	Execute(args map[string]any) (string, error)
+	Execute(ctx context.Context, args map[string]any) (string, error)
 }
 
 // Registry maps tool aliases to their providers. Users register their own implementations here.

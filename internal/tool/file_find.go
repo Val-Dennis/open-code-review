@@ -2,11 +2,16 @@ package tool
 
 import (
 	"bytes"
+	"context"
 	"os/exec"
 	"strings"
+	"time"
 )
 
-const fileFindMaxCount = 100
+const (
+	fileFindMaxCount = 100
+	fileFindTimeout  = 10 * time.Second
+)
 
 // FileFindProvider finds files by name or pattern in the repository using git ls-files.
 type FileFindProvider struct {
@@ -17,7 +22,7 @@ func NewFileFind(fr *FileReader) *FileFindProvider { return &FileFindProvider{Fi
 
 func (p *FileFindProvider) Tool() Tool { return FileFind }
 
-func (p *FileFindProvider) Execute(args map[string]any) (string, error) {
+func (p *FileFindProvider) Execute(ctx context.Context, args map[string]any) (string, error) {
 	queryName, _ := args["query_name"].(string)
 	if strings.TrimSpace(queryName) == "" {
 		return "// The file was not found", nil
@@ -25,7 +30,7 @@ func (p *FileFindProvider) Execute(args map[string]any) (string, error) {
 
 	caseSensitive, _ := args["case_sensitive"].(bool)
 
-	files, err := p.listGitFiles()
+	files, err := p.listGitFiles(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -58,16 +63,22 @@ func (p *FileFindProvider) Execute(args map[string]any) (string, error) {
 
 // listGitFiles returns tracked and untracked files (respecting .gitignore) via git ls-files.
 // In range/commit mode it uses git ls-tree to list files at the reviewed ref.
-func (p *FileFindProvider) listGitFiles() ([]string, error) {
+func (p *FileFindProvider) listGitFiles(parentCtx context.Context) ([]string, error) {
+	ctx, cancel := context.WithTimeout(parentCtx, fileFindTimeout)
+	defer cancel()
+
 	var cmd *exec.Cmd
 	if ref := p.FileReader.Ref; ref != "" {
-		cmd = exec.Command("git", "ls-tree", "-r", "--name-only", ref)
+		cmd = exec.CommandContext(ctx, "git", "ls-tree", "-r", "--name-only", ref)
 	} else {
-		cmd = exec.Command("git", "ls-files", "--cached", "--others", "--exclude-standard")
+		cmd = exec.CommandContext(ctx, "git", "ls-files", "--cached", "--others", "--exclude-standard")
 	}
 	cmd.Dir = p.FileReader.RepoDir
 	output, err := cmd.Output()
 	if err != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
 		return nil, err
 	}
 

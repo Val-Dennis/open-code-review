@@ -962,7 +962,7 @@ func (a *Agent) executeToolCall(ctx context.Context, newPath string, call llm.To
 
 	// Synchronous path for all other tools
 	telemetry.PrintToolCallStarted(t.Name(), args)
-	result, err := p.Execute(args)
+	result, err := p.Execute(ctx, args)
 	dur := time.Since(startTime)
 	ok := err == nil
 	telemetry.RecordToolCall(ctx, t.Name(), dur, ok)
