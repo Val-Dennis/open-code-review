@@ -296,6 +296,7 @@ ocr review \
 | `--concurrency` | — | `8` | 最大并发文件审查数 |
 | `--timeout` | — | `10` | 并发任务超时时间（分钟） |
 | `--audience` | — | `human` | `human`（显示进度）或 `agent`（仅输出摘要） |
+| `--background` | `-b` | — | 可选的需求/业务背景信息；使用 `--commit` 时如未指定则自动从 commit message 中提取 |
 | `--rule` | — | — | 自定义 JSON 审查规则路径 |
 | `--max-tools` | — | 内置默认 | 每个文件的最大工具调用轮次；仅在大于模板默认值时生效 |
 | `--max-git-procs` | — | 内置默认 | 最大并发 git 子进程数 |
@@ -316,6 +317,9 @@ ocr review --from main --to my-feature --concurrency 4
 
 # 审查特定提交并以 JSON 格式输出详细信息
 ocr review --commit abc123 --format json --audience agent
+
+# 提供需求背景以获得更有针对性的审查
+ocr review --background "为登录 API 添加限流"
 
 # 使用自定义审查规则
 ocr review --rule /path/to/my-rules.json
