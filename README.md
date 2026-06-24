@@ -442,7 +442,8 @@ Layers 1–3 share the same JSON format:
   "rules": [
     {
       "path": "force-api/**/*.java",
-      "rule": "All new methods must validate required parameters for null values"
+      "rule": "All new methods must validate required parameters for null values",
+      "merge_system_rule": true
     },
     {
       "path": "**/*mapper*.xml",
@@ -453,6 +454,7 @@ Layers 1–3 share the same JSON format:
 ```
 
 - `path` supports `**` recursive matching and `{java,kt}` brace expansion.
+- `merge_system_rule` is optional. When `true`, the matched built-in system rule is merged with this user rule; otherwise the user rule replaces the system rule.
 - Within each layer, rules are evaluated in declaration order — the first match wins.
 - If a rule file does not exist, it is silently skipped.
 
