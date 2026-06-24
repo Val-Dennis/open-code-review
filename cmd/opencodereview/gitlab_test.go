@@ -14,6 +14,8 @@ func TestParseGitLabBaseURL(t *testing.T) {
 		{"https://gitlab.example.com:8443/group/project.git", "https://gitlab.example.com:8443"},
 		{"http://gitlab.internal/group/project.git", "http://gitlab.internal"},
 		{"git@gitlab.com:group/project.git", "https://gitlab.com"},
+		{"ssh://git@git.example.com:4422/company/project-next.git", "https://git.example.com"},
+        {"ssh://git@gitlab.com/group/project.git", "https://gitlab.com"},
 		{"", ""},
 		{"not-a-remote", ""},
 	}
@@ -70,6 +72,15 @@ func TestDetectProjectIDAndGitLabURLFromRepo(t *testing.T) {
 	gotURL := detectGitLabURL(dir)
 	if gotURL != "https://gitlab.com" {
 		t.Errorf("detectGitLabURL = %q, want %q", gotURL, "https://gitlab.com")
+	}
+}
+
+func TestDetectGitLabURL_StripsSSHGitPort(t *testing.T) {
+	dir := initGitRepoWithRemote(t, "ssh://git@git.valiton.com:22022/techmuc/modash/modash-next.git")
+
+	gotURL := detectGitLabURL(dir)
+	if gotURL != "https://git.valiton.com" {
+		t.Errorf("detectGitLabURL = %q, want %q", gotURL, "https://git.valiton.com")
 	}
 }
 
