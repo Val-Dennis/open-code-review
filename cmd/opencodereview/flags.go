@@ -110,6 +110,8 @@ type reviewOptions struct {
 	maxTools       int
 	maxGitProcs    int
 	preview        bool
+	post           bool // --post: force posting
+	noPost         bool // --no-post: disable posting
 	showHelp       bool
 }
 
@@ -133,6 +135,8 @@ func parseReviewFlags(args []string) (reviewOptions, error) {
 	a.IntVar(&opts.maxTools, "max-tools", 0, "max tool call rounds per file (0 = template default; min 10)")
 	a.IntVar(&opts.maxGitProcs, "max-git-procs", 16, "max concurrent git subprocesses")
 	a.BoolVarP(&opts.preview, "preview", "p", false, "preview which files will be reviewed without running the LLM")
+	a.BoolVar(&opts.post, "post", false, "post review comments to GitLab MR (overrides config)")
+	a.BoolVar(&opts.noPost, "no-post", false, "skip posting even if config has auto_post: true")
 
 	if err := a.Parse(args); err != nil {
 		return opts, fmt.Errorf("parse flags: %w", err)
@@ -174,6 +178,10 @@ func parseReviewFlags(args []string) (reviewOptions, error) {
 	if opts.maxTools > 0 && opts.maxTools < minMaxTools {
 		fmt.Fprintf(os.Stderr, "[ocr] --max-tools %d is below minimum %d, using %d\n", opts.maxTools, minMaxTools, minMaxTools)
 		opts.maxTools = minMaxTools
+	}
+
+	if opts.post && opts.noPost {
+		return opts, fmt.Errorf("--post and --no-post cannot be used together")
 	}
 
 	if opts.maxGitProcs < 0 {
@@ -223,6 +231,8 @@ Flags:
   --max-tools int         max tool call rounds per file (0 = template default; min 10)
   --model string          override LLM model for this review (e.g., claude-opus-4-6)
   -p, --preview           preview which files will be reviewed without running the LLM
+  --post                  force posting review comments to GitLab MR (overrides config)
+  --no-post               skip posting even if config has auto_post: true
   --repo string           root directory of the git repository (default: current dir)
   --rule string           path to JSON file with system review rules
   --timeout int           concurrent task timeout in minutes (default 10)
@@ -308,6 +318,9 @@ Examples:
   ocr config set language English
   ocr config set telemetry.enabled true
 
-Supported keys: provider, model, providers.<name>.<field>, custom_providers.<name>.<field>, llm.url, llm.auth_token, llm.auth_header, llm.model, llm.use_anthropic, llm.extra_body, language, telemetry.enabled, telemetry.exporter, telemetry.otlp_endpoint, telemetry.content_logging
+  # Personal access token (optional, used by 'ocr setup' to auto-provision project tokens)
+  ocr config set gitlab.personal_token glpat-xxxx
+
+Supported keys: provider, model, providers.<name>.<field>, custom_providers.<name>.<field>, llm.url, llm.auth_token, llm.auth_header, llm.model, llm.use_anthropic, llm.extra_body, language, telemetry.enabled, telemetry.exporter, telemetry.otlp_endpoint, telemetry.content_logging, gitlab.personal_token
 Provider fields: api_key, url, protocol, model, models, auth_header, extra_body`)
 }

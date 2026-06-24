@@ -75,7 +75,7 @@ func runConfigSet(key, value string) error {
 
 	displayValue := value
 	normalizedKey := strings.ToLower(strings.ReplaceAll(key, "_", ""))
-	if strings.HasSuffix(normalizedKey, "apikey") || strings.HasSuffix(normalizedKey, "authtoken") {
+	if strings.HasSuffix(normalizedKey, "apikey") || strings.HasSuffix(normalizedKey, "authtoken") || strings.HasSuffix(normalizedKey, "token") {
 		displayValue = maskKey(value)
 	}
 	fmt.Printf("Set %s = %s\n", key, displayValue)
@@ -164,6 +164,7 @@ type Config struct {
 	Llm             LlmConfig                `json:"llm,omitempty"`
 	Language        string                   `json:"language,omitempty"`
 	Telemetry       *TelemetryConfig         `json:"telemetry,omitempty"`
+	GitLabToken     string                   `json:"gitlab_personal_token,omitempty"`
 }
 
 type LlmConfig struct {
@@ -310,8 +311,10 @@ func setConfigValue(cfg *Config, key, value string) error {
 			return fmt.Errorf("invalid JSON for llm.extra_body: %w", err)
 		}
 		cfg.Llm.ExtraBody = m
+	case "gitlab.personal_token":
+		cfg.GitLabToken = value
 	default:
-		return fmt.Errorf("unknown config key: %s\nSupported keys: provider, model, providers.<name>.<field>, custom_providers.<name>.<field>, llm.url, llm.auth_token, llm.auth_header, llm.model, llm.use_anthropic, llm.extra_body, language, telemetry.enabled, telemetry.exporter, telemetry.otlp_endpoint, telemetry.content_logging\nProvider fields: api_key, url, protocol, model, models, auth_header, extra_body", key)
+		return fmt.Errorf("unknown config key: %s\nSupported keys: provider, model, providers.<name>.<field>, custom_providers.<name>.<field>, llm.url, llm.auth_token, llm.auth_header, llm.model, llm.use_anthropic, llm.extra_body, language, telemetry.enabled, telemetry.exporter, telemetry.otlp_endpoint, telemetry.content_logging, gitlab.personal_token\nProvider fields: api_key, url, protocol, model, models, auth_header, extra_body", key)
 	}
 	return nil
 }

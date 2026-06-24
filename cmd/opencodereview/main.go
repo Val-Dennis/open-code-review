@@ -54,6 +54,8 @@ func dispatch() error {
 		return runRules(args[1:])
 	case "viewer":
 		return runViewer(args[1:])
+	case "setup":
+		return runSetup(args[1:])
 	case "-h", "--help":
 		printTopLevelUsage()
 		return nil
@@ -74,6 +76,7 @@ Commands:
   config       Manage configuration settings
   llm          LLM utility commands
   viewer       Start the WebUI session viewer
+  setup        Configure GitLab integration for this repo
   version      Show version information
 
 Examples:
@@ -82,8 +85,10 @@ Examples:
   ocr config provider                      Interactive provider setup
   ocr config model                         Interactive model selection
   ocr config set llm.model opus-4-6        Set a config value
+  ocr config set gitlab.personal_token xxx Store PAT for auto-provisioning
   ocr llm test                             Test LLM connectivity
   ocr llm providers                        List built-in providers
+  ocr setup                                Configure GitLab integration for this repo
   ocr version                              Show version info
 
 Use "ocr review -h" for more information about review.
