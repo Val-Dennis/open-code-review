@@ -221,6 +221,17 @@ func TestSetConfigValueModelWithCustomProvider(t *testing.T) {
 	}
 }
 
+func TestSetConfigValueGitLabPersonalToken(t *testing.T) {
+	cfg := &Config{}
+
+	if err := setConfigValue(cfg, "gitlab.personal_token", "glpat-test"); err != nil {
+		t.Fatalf("setConfigValue: %v", err)
+	}
+	if cfg.GitLabToken != "glpat-test" {
+		t.Errorf("GitLabToken = %q, want %q", cfg.GitLabToken, "glpat-test")
+	}
+}
+
 // --- unset tests ---
 
 func TestParseConfigArgsUnset(t *testing.T) {

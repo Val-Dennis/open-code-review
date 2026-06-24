@@ -15,6 +15,7 @@ import (
 	"github.com/open-code-review/open-code-review/internal/diff"
 	"github.com/open-code-review/open-code-review/internal/gitcmd"
 	"github.com/open-code-review/open-code-review/internal/llm"
+	"github.com/open-code-review/open-code-review/internal/model"
 	"github.com/open-code-review/open-code-review/internal/stdout"
 	"github.com/open-code-review/open-code-review/internal/telemetry"
 	"github.com/open-code-review/open-code-review/internal/tool"
@@ -49,6 +50,31 @@ func runReview(args []string) error {
 	if err != nil {
 		return fmt.Errorf("resolve repo: %w", err)
 	}
+
+	// Load per-repo config and merge defaults
+	repoCfg, err := loadRepoConfig(repoDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[ocr] Warning: %v\n", err)
+	}
+	if repoCfg != nil && repoCfg.Review != nil {
+		rc := repoCfg.Review
+		if opts.maxTools <= 0 && rc.MaxTools > 0 {
+			opts.maxTools = rc.MaxTools
+		}
+		if opts.from == "" && rc.From != "" {
+			opts.from = rc.From
+		}
+		if opts.background == "" && rc.Background != "" {
+			opts.background = rc.Background
+		}
+	}
+	if repoCfg != nil && repoCfg.LLM != nil {
+		llm := repoCfg.LLM
+		if opts.model == "" && llm.Model != "" {
+			opts.model = llm.Model
+		}
+	}
+
 	if err := validateReviewRefs(repoDir, opts); err != nil {
 		return err
 	}
@@ -179,13 +205,16 @@ func runReview(args []string) error {
 	}
 
 	if opts.outputFormat == "json" {
-		return outputJSONWithWarnings(comments, ag.Warnings(), ag.FilesReviewed(), ag.TotalInputTokens(), ag.TotalOutputTokens(), ag.TotalTokensUsed(), ag.TotalCacheReadTokens(), ag.TotalCacheWriteTokens(), duration)
-	}
-	if opts.audience == "agent" {
+		if err := outputJSONWithWarnings(comments, ag.Warnings(), ag.FilesReviewed(), ag.TotalInputTokens(), ag.TotalOutputTokens(), ag.TotalTokensUsed(), ag.TotalCacheReadTokens(), ag.TotalCacheWriteTokens(), duration); err != nil {
+			return err
+		}
+	} else {
 		outputTextWithWarnings(comments, ag.Warnings())
-		return nil
 	}
-	outputTextWithWarnings(comments, ag.Warnings())
+
+	if err := postToGitLabIfConfigured(comments, ag.Warnings(), opts, repoCfg, repoDir); err != nil {
+		fmt.Fprintf(os.Stderr, "[ocr] GitLab posting failed: %v\n", err)
+	}
 
 	return nil
 }
@@ -267,6 +296,45 @@ func runPreview(repoDir string, opts reviewOptions, fileFilter *rules.FileFilter
 
 	outputPreviewText(preview)
 	return nil
+}
+
+// postToGitLabIfConfigured checks config/flags and posts to GitLab if appropriate.
+func postToGitLabIfConfigured(comments []model.LlmComment, warnings []agent.AgentWarning, opts reviewOptions, repoCfg *RepoConfig, repoDir string) error {
+	if opts.noPost {
+		return nil
+	}
+
+	shouldPost := opts.post
+	if !shouldPost && repoCfg != nil && repoCfg.Review != nil {
+		shouldPost = repoCfg.Review.AutoPost
+	}
+	if !shouldPost {
+		return nil
+	}
+
+	if repoCfg == nil || repoCfg.GitLab == nil || repoCfg.GitLab.Token == "" {
+		return fmt.Errorf("no GitLab token configured. Run 'ocr setup' first")
+	}
+	if repoCfg.GitLab.ProjectID == "" {
+		return fmt.Errorf("no GitLab project ID configured. Run 'ocr setup' first")
+	}
+
+	gitlabURL := repoCfg.GitLab.URL
+	if gitlabURL == "" {
+		gitlabURL = detectGitLabURL(repoDir)
+	}
+	client := newGitLabClient(repoCfg.GitLab.Token, repoCfg.GitLab.ProjectID, gitlabURL)
+
+	if err := client.autoDetectMR(repoDir); err != nil {
+		return fmt.Errorf("auto-detect MR: %w", err)
+	}
+
+	if len(comments) == 0 {
+		fmt.Fprintf(os.Stderr, "[ocr] Posting review result to MR !%d...\n", client.MRIIID)
+	} else {
+		fmt.Fprintf(os.Stderr, "[ocr] Posting %d comment(s) to MR !%d...\n", len(comments), client.MRIIID)
+	}
+	return client.PostComments(comments, warnings)
 }
 
 func buildToolRegistry(collector *tool.CommentCollector, fr *tool.FileReader) *tool.Registry {
