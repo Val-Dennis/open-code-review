@@ -110,6 +110,7 @@ type reviewOptions struct {
 	maxTools       int
 	maxGitProcs    int
 	preview        bool
+	fast           bool
 	post           bool // --post: force posting
 	noPost         bool // --no-post: disable posting
 	showHelp       bool
@@ -135,7 +136,8 @@ func parseReviewFlags(args []string) (reviewOptions, error) {
 	a.IntVar(&opts.maxTools, "max-tools", 0, "max tool call rounds per file (0 = template default; min 10)")
 	a.IntVar(&opts.maxGitProcs, "max-git-procs", 16, "max concurrent git subprocesses")
 	a.BoolVarP(&opts.preview, "preview", "p", false, "preview which files will be reviewed without running the LLM")
-	a.BoolVar(&opts.post, "post", false, "post review comments to GitLab MR (overrides config)")
+	a.BoolVar(&opts.fast, "fast", false, "fast mode: review raw git diff in a single LLM call (best for small PRs)")
+	a.BoolVar(&opts.post, "post", false, "force posting review comments to GitLab MR (overrides config)")
 	a.BoolVar(&opts.noPost, "no-post", false, "skip posting even if config has auto_post: true")
 
 	if err := a.Parse(args); err != nil {
@@ -224,6 +226,7 @@ Flags:
   --audience string       output audience: human (show progress) or agent (summary only) (default "human")
   -b, --background string optional requirement/business context for the review
   -c, --commit string     single commit hash or tag to review (vs its parent)
+  --fast                  fast mode: review raw git diff in a single LLM call (best for small PRs)
   -f, --format string     output format: text or json (default "text")
   --concurrency int       max concurrent file reviews (default 8)
   --max-git-procs int     max concurrent git subprocesses (default 16)

@@ -94,6 +94,10 @@ func runReview(args []string) error {
 		return runPreview(repoDir, opts, fileFilter)
 	}
 
+	if opts.fast {
+		return runFastReview(repoDir, opts)
+	}
+
 	toolEntries, err := toolsconfig.Load(opts.toolConfigPath)
 	if err != nil {
 		return fmt.Errorf("load tools: %w", err)
@@ -335,6 +339,133 @@ func postToGitLabIfConfigured(comments []model.LlmComment, warnings []agent.Agen
 		fmt.Fprintf(os.Stderr, "[ocr] Posting %d comment(s) to MR !%d...\n", len(comments), client.MRIIID)
 	}
 	return client.PostComments(comments, warnings)
+}
+
+// runFastReview performs a lightweight review by sending the raw git diff to the
+// LLM in a single request. This is intended for small PRs where the full
+// multi-step agent review is unnecessary.
+func runFastReview(repoDir string, opts reviewOptions) error {
+	ctx := context.Background()
+
+	// Load per-repo config and merge defaults (mirrors runReview).
+	repoCfg, err := loadRepoConfig(repoDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[ocr] Warning: %v\n", err)
+	}
+	if repoCfg != nil && repoCfg.Review != nil {
+		rc := repoCfg.Review
+		if opts.from == "" && rc.From != "" {
+			opts.from = rc.From
+		}
+		if opts.background == "" && rc.Background != "" {
+			opts.background = rc.Background
+		}
+	}
+	if repoCfg != nil && repoCfg.LLM != nil {
+		if opts.model == "" && repoCfg.LLM.Model != "" {
+			opts.model = repoCfg.LLM.Model
+		}
+	}
+
+	// Load file filter (user include/exclude patterns) for consistent filtering
+	// with the agent review path.
+	resolver, fileFilter, err := rules.NewResolver(repoDir, opts.rulePath)
+	if err != nil {
+		return fmt.Errorf("load rules: %w", err)
+	}
+	_ = resolver // unused in fast mode
+
+	gitRunner := gitcmd.New(opts.maxGitProcs)
+
+	var provider *diff.Provider
+	switch {
+	case opts.commit != "":
+		provider = diff.NewCommitProvider(repoDir, opts.commit, gitRunner)
+	case opts.from != "" && opts.to != "":
+		provider = diff.NewProvider(repoDir, opts.from, opts.to, gitRunner)
+	default:
+		provider = diff.NewWorkspaceProvider(repoDir, gitRunner)
+	}
+
+	diffs, err := provider.GetDiff(ctx)
+	if err != nil {
+		return fmt.Errorf("get diff: %w", err)
+	}
+
+	if len(diffs) == 0 {
+		fmt.Println("No changes detected. Nothing to review.")
+		return nil
+	}
+
+	keptDiffs := agent.FilterDiffs(fileFilter, diffs)
+
+	if len(keptDiffs) == 0 {
+		fmt.Println("No reviewable changes detected. Nothing to review.")
+		return nil
+	}
+
+	var sb strings.Builder
+	for _, d := range keptDiffs {
+		if d.Diff != "" {
+			sb.WriteString(d.Diff)
+			sb.WriteString("\n")
+		}
+	}
+	diffText := sb.String()
+
+	cfgPath, err := defaultConfigPath()
+	if err != nil {
+		return err
+	}
+
+	ep, err := llm.ResolveEndpointWithModelOverride(cfgPath, opts.model)
+	if err != nil {
+		return fmt.Errorf("resolve LLM endpoint: %w", err)
+	}
+
+	llmClient := llm.NewLLMClient(ep)
+
+	systemPrompt := "You are an expert code reviewer. Review the following git diff and provide concise, actionable feedback. Focus on bugs, security issues, logic errors, and significant code quality problems. Skip minor style issues."
+	if opts.background != "" {
+		systemPrompt += "\n\nContext: " + opts.background
+	}
+
+	userContent := "Please review the following git diff:\n\n```diff\n" + diffText + "\n```"
+
+	req := llm.ChatRequest{
+		Model: ep.Model,
+		Messages: []llm.Message{
+			llm.NewTextMessage("system", systemPrompt),
+			llm.NewTextMessage("user", userContent),
+		},
+	}
+
+	if opts.audience != "agent" {
+		fmt.Println("[ocr] Running fast review...")
+	}
+
+	resp, err := llmClient.CompletionsWithCtx(ctx, req)
+	if err != nil {
+		return fmt.Errorf("LLM request failed: %w", err)
+	}
+
+	content := resp.Content()
+	if content == "" {
+		fmt.Println("No review generated.")
+		return nil
+	}
+
+	fmt.Println(content)
+
+	// Post to GitLab if configured, as a single generic note.
+	comments := []model.LlmComment{
+		{Content: content},
+	}
+	if err := postToGitLabIfConfigured(comments, nil, opts, repoCfg, repoDir); err != nil {
+		fmt.Fprintf(os.Stderr, "[ocr] GitLab posting failed: %v\n", err)
+	}
+
+	return nil
 }
 
 func buildToolRegistry(collector *tool.CommentCollector, fr *tool.FileReader) *tool.Registry {

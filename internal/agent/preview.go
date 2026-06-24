@@ -3,8 +3,10 @@ package agent
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	allowedext "github.com/open-code-review/open-code-review/internal/config/allowlist"
+	"github.com/open-code-review/open-code-review/internal/config/rules"
 	"github.com/open-code-review/open-code-review/internal/model"
 )
 
@@ -40,25 +42,26 @@ type DiffPreview struct {
 	ExcludedCount   int                `json:"excluded_count"`
 }
 
-// whyExcluded applies the filter algorithm as shouldReview but
-// returns the specific reason a file is excluded.
-func (a *Agent) whyExcluded(d model.Diff) ExcludeReason {
+// WhyExcluded determines whether a diff should be excluded from review
+// and returns the specific reason. It applies the same filter algorithm
+// used by the agent path, so callers (including fast-mode) share one
+// implementation.
+func WhyExcluded(filter *rules.FileFilter, d model.Diff) ExcludeReason {
 	if d.IsBinary {
 		return ExcludeBinary
 	}
 
-	path := effectivePath(d)
-	f := a.args.FileFilter
+	path := EffectivePath(d)
 
-	if f != nil && f.IsUserExcluded(path) {
+	if filter != nil && filter.IsUserExcluded(path) {
 		return ExcludeUserRule
 	}
 
-	if f != nil && f.HasInclude() && f.IsUserIncluded(path) {
+	if filter != nil && filter.HasInclude() && filter.IsUserIncluded(path) {
 		return ExcludeNone
 	}
 
-	ext := a.extFromPath(path)
+	ext := extFromPath(path)
 	if ext != "" && !allowedext.IsAllowedExt(ext) {
 		return ExcludeExtension
 	}
@@ -68,6 +71,22 @@ func (a *Agent) whyExcluded(d model.Diff) ExcludeReason {
 	}
 
 	return ExcludeNone
+}
+
+// FilterDiffs returns only the diffs that should be reviewed, applying
+// user include/exclude patterns and default extension/path filters.
+func FilterDiffs(filter *rules.FileFilter, diffs []model.Diff) []model.Diff {
+	var kept []model.Diff
+	for _, d := range diffs {
+		if WhyExcluded(filter, d) == ExcludeNone {
+			kept = append(kept, d)
+		}
+	}
+	return kept
+}
+
+func (a *Agent) whyExcluded(d model.Diff) ExcludeReason {
+	return WhyExcluded(a.args.FileFilter, d)
 }
 
 // Preview loads diffs and applies the filter algorithm, returning structured
@@ -84,7 +103,7 @@ func (a *Agent) Preview(ctx context.Context) (*DiffPreview, error) {
 	}
 
 	for _, d := range a.diffs {
-		path := effectivePath(d)
+		path := EffectivePath(d)
 		entry := DiffPreviewEntry{
 			Path:       path,
 			Insertions: d.Insertions,
@@ -112,11 +131,26 @@ func (a *Agent) Preview(ctx context.Context) (*DiffPreview, error) {
 	return result, nil
 }
 
-func effectivePath(d model.Diff) string {
+// EffectivePath returns the relevant path for a diff entry,
+// falling back to OldPath for deleted files.
+func EffectivePath(d model.Diff) string {
 	if d.NewPath == "/dev/null" {
 		return d.OldPath
 	}
 	return d.NewPath
+}
+
+// extFromPath returns the file extension with leading dot, lowercased.
+func extFromPath(path string) string {
+	basename := path
+	if idx := strings.LastIndex(path, "/"); idx >= 0 {
+		basename = path[idx+1:]
+	}
+	dot := strings.LastIndex(basename, ".")
+	if dot <= 0 {
+		return ""
+	}
+	return strings.ToLower(basename[dot:])
 }
 
 func diffStatus(d model.Diff) string {

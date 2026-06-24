@@ -487,9 +487,9 @@ func TestEffectivePath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := effectivePath(tt.diff)
+			got := EffectivePath(tt.diff)
 			if got != tt.expected {
-				t.Errorf("effectivePath() = %v, want %v", got, tt.expected)
+				t.Errorf("EffectivePath() = %v, want %v", got, tt.expected)
 			}
 		})
 	}
