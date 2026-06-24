@@ -358,6 +358,7 @@ See the [`examples/`](./examples/) directory for integration examples:
 | `--to` | — | — | Target ref (e.g., `feature-branch`) |
 | `--commit` | `-c` | — | Single commit to review |
 | `--preview` | `-p` | `false` | Preview which files will be reviewed without running the LLM |
+| `--fast` | — | `false` | Fast mode: send the raw diff in a single LLM call (see [Fast Mode](#fast-mode)) |
 | `--format` | `-f` | `text` | Output format: `text` or `json` |
 | `--concurrency` | — | `8` | Max concurrent file reviews |
 | `--timeout` | — | `10` | Concurrent task timeout in minutes |
@@ -400,7 +401,11 @@ ocr review --commit abc123 --model claude-sonnet-4-6
 # Provide requirement context for more targeted review
 ocr review --background "Adding rate limiting to the login API"
 
-# Use custom review rules
+# Fast mode — single LLM call, best for small PRs
+ocr review --fast
+ocr review --fast --from main --to my-feature
+
+# Use custom review rules (works in both standard and fast mode)
 ocr review --rule /path/to/my-rules.json
 
 # Preview which rule applies to a file
@@ -497,6 +502,22 @@ Rule files also support `include` and `exclude` fields to control which files en
 **/test/**/*_test.py, **/tests/**/*_test.py, **/*_test.py,
 **/*_spec.rb, **/spec/**/*_spec.rb, **/oh_modules/**
 ```
+
+### Fast Mode
+
+Use `--fast` to run a lightweight, single-call review instead of the full multi-step agent:
+
+```bash
+ocr review --fast
+ocr review --fast --from main --to feature-branch
+ocr review --fast --commit abc123
+```
+
+Fast mode sends the entire filtered diff to the LLM in one request, so it is best suited for small to medium changesets. It skips the planning phase, tool use, and per-file concurrency — in exchange for much lower latency and token usage.
+
+**Fast mode applies the same file filtering as the standard review.** Binary files, unsupported extensions (lock files, images, etc.), test files, and user-configured `include`/`exclude` patterns from `rule.json` are all filtered identically. The `--rule` flag works the same way in both modes. See [Path Filtering](#path-filtering) for details.
+
+The `--background`, `--model`, `--format`, and `--audience` flags all work in fast mode.
 
 ## Configuration Reference
 

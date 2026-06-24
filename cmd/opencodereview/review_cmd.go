@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/open-code-review/open-code-review/internal/agent"
-	"github.com/open-code-review/open-code-review/internal/config/allowlist"
 	"github.com/open-code-review/open-code-review/internal/config/rules"
 	"github.com/open-code-review/open-code-review/internal/config/template"
 	"github.com/open-code-review/open-code-review/internal/config/toolsconfig"
@@ -398,40 +397,7 @@ func runFastReview(repoDir string, opts reviewOptions) error {
 		return nil
 	}
 
-	// Apply the same file filtering as the agent path.
-	var keptDiffs []model.Diff
-	for _, d := range diffs {
-		if d.IsBinary {
-			continue
-		}
-
-		path := d.NewPath
-		if path == "/dev/null" {
-			path = d.OldPath
-		}
-
-		if fileFilter != nil && fileFilter.IsUserExcluded(path) {
-			continue
-		}
-
-		if fileFilter != nil && fileFilter.HasInclude() && !fileFilter.IsUserIncluded(path) {
-			continue
-		}
-
-		ext := ""
-		if idx := strings.LastIndex(path, "."); idx >= 0 {
-			ext = strings.ToLower(path[idx:])
-		}
-		if ext != "" && !allowedext.IsAllowedExt(ext) {
-			continue
-		}
-
-		if allowedext.IsExcludedPath(path) {
-			continue
-		}
-
-		keptDiffs = append(keptDiffs, d)
-	}
+	keptDiffs := agent.FilterDiffs(fileFilter, diffs)
 
 	if len(keptDiffs) == 0 {
 		fmt.Println("No reviewable changes detected. Nothing to review.")
