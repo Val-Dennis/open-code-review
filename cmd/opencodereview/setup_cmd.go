@@ -111,6 +111,7 @@ func runSetup(args []string) error {
 			AutoPost: autoPost,
 			MaxTools: maxTools,
 			From:     fromBranch,
+			To:       "HEAD",
 		},
 	}
 

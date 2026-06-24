@@ -54,3 +54,115 @@ func TestParseReviewFlagsAllowsFromAndTo(t *testing.T) {
 		t.Fatalf("unexpected opts: from=%q to=%q", opts.from, opts.to)
 	}
 }
+
+// applyToDefault mirrors the defaulting logic used in runReview/runFastReview
+// after config merge: when --from is set but --to is empty, default to HEAD.
+func applyToDefault(opts *reviewOptions) {
+	if opts.from != "" && opts.to == "" {
+		opts.to = "HEAD"
+	}
+}
+
+func TestApplyToDefault_FromWithoutTo(t *testing.T) {
+	opts := reviewOptions{from: "origin/main"}
+	applyToDefault(&opts)
+	if opts.to != "HEAD" {
+		t.Errorf("to = %q, want %q", opts.to, "HEAD")
+	}
+}
+
+func TestApplyToDefault_BothSet(t *testing.T) {
+	opts := reviewOptions{from: "origin/main", to: "feature"}
+	applyToDefault(&opts)
+	if opts.to != "feature" {
+		t.Errorf("to = %q, want %q (should not override explicit value)", opts.to, "feature")
+	}
+}
+
+func TestApplyToDefault_NeitherSet(t *testing.T) {
+	opts := reviewOptions{}
+	applyToDefault(&opts)
+	if opts.to != "" {
+		t.Errorf("to = %q, want empty (workspace mode)", opts.to)
+	}
+}
+
+func TestApplyToDefault_OnlyToSet(t *testing.T) {
+	opts := reviewOptions{to: "HEAD"}
+	applyToDefault(&opts)
+	if opts.to != "HEAD" {
+		t.Errorf("to = %q, want %q", opts.to, "HEAD")
+	}
+}
+
+func TestRepoConfigFromDefaultsToHEAD(t *testing.T) {
+	opts := reviewOptions{}
+	rc := &ReviewSection{From: "origin/main"}
+	if opts.from == "" && rc.From != "" {
+		opts.from = rc.From
+	}
+	if opts.to == "" && rc.To != "" {
+		opts.to = rc.To
+	}
+	applyToDefault(&opts)
+
+	if opts.from != "origin/main" {
+		t.Errorf("from = %q, want %q", opts.from, "origin/main")
+	}
+	if opts.to != "HEAD" {
+		t.Errorf("to = %q, want %q", opts.to, "HEAD")
+	}
+}
+
+func TestRepoConfigFromAndTo(t *testing.T) {
+	opts := reviewOptions{}
+	rc := &ReviewSection{From: "origin/main", To: "HEAD"}
+	if opts.from == "" && rc.From != "" {
+		opts.from = rc.From
+	}
+	if opts.to == "" && rc.To != "" {
+		opts.to = rc.To
+	}
+	applyToDefault(&opts)
+
+	if opts.from != "origin/main" {
+		t.Errorf("from = %q, want %q", opts.from, "origin/main")
+	}
+	if opts.to != "HEAD" {
+		t.Errorf("to = %q, want %q", opts.to, "HEAD")
+	}
+}
+
+func TestRepoConfigCustomTo(t *testing.T) {
+	opts := reviewOptions{}
+	rc := &ReviewSection{From: "origin/develop", To: "staging"}
+	if opts.from == "" && rc.From != "" {
+		opts.from = rc.From
+	}
+	if opts.to == "" && rc.To != "" {
+		opts.to = rc.To
+	}
+	applyToDefault(&opts)
+
+	if opts.from != "origin/develop" {
+		t.Errorf("from = %q, want %q", opts.from, "origin/develop")
+	}
+	if opts.to != "staging" {
+		t.Errorf("to = %q, want %q (explicit config To should be used)", opts.to, "staging")
+	}
+}
+
+func TestCLIFromToOverridesDefault(t *testing.T) {
+	opts, err := parseReviewFlags([]string{"--from", "origin/develop", "--to", "my-branch"})
+	if err != nil {
+		t.Fatalf("parseReviewFlags: %v", err)
+	}
+	applyToDefault(&opts)
+
+	if opts.from != "origin/develop" {
+		t.Errorf("from = %q, want %q", opts.from, "origin/develop")
+	}
+	if opts.to != "my-branch" {
+		t.Errorf("to = %q, want %q (explicit --to should not be overridden)", opts.to, "my-branch")
+	}
+}

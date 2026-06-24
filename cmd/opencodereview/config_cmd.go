@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/open-code-review/open-code-review/internal/config/template"
 	"github.com/open-code-review/open-code-review/internal/llm"
 )
 
@@ -165,6 +166,7 @@ type Config struct {
 	Language        string                   `json:"language,omitempty"`
 	Telemetry       *TelemetryConfig         `json:"telemetry,omitempty"`
 	GitLabToken     string                   `json:"gitlab_personal_token,omitempty"`
+	Prompts         *template.PromptsConfig  `json:"prompts,omitempty"`
 }
 
 type LlmConfig struct {
@@ -222,6 +224,9 @@ func setConfigValue(cfg *Config, key, value string) error {
 	}
 	if strings.HasPrefix(key, "custom_providers.") {
 		return setCustomProviderValue(cfg, key, value)
+	}
+	if strings.HasPrefix(key, "prompts.") {
+		return setPromptValue(cfg, key, value)
 	}
 
 	switch key {
@@ -314,7 +319,7 @@ func setConfigValue(cfg *Config, key, value string) error {
 	case "gitlab.personal_token":
 		cfg.GitLabToken = value
 	default:
-		return fmt.Errorf("unknown config key: %s\nSupported keys: provider, model, providers.<name>.<field>, custom_providers.<name>.<field>, llm.url, llm.auth_token, llm.auth_header, llm.model, llm.use_anthropic, llm.extra_body, language, telemetry.enabled, telemetry.exporter, telemetry.otlp_endpoint, telemetry.content_logging, gitlab.personal_token\nProvider fields: api_key, url, protocol, model, models, auth_header, extra_body", key)
+		return fmt.Errorf("unknown config key: %s\nSupported keys: provider, model, providers.<name>.<field>, custom_providers.<name>.<field>, llm.url, llm.auth_token, llm.auth_header, llm.model, llm.use_anthropic, llm.extra_body, language, telemetry.enabled, telemetry.exporter, telemetry.otlp_endpoint, telemetry.content_logging, gitlab.personal_token, prompts.<key>\nProvider fields: api_key, url, protocol, model, models, auth_header, extra_body\nPrompt keys: main_task_system, main_task_user, plan_task_system, plan_task_user, memory_compression_task_system, memory_compression_task_user, review_filter_task_system, review_filter_task_user, re_location_task_system, re_location_task_user, fast_mode_system", key)
 	}
 	return nil
 }
@@ -444,6 +449,43 @@ func setCustomProviderField(cfg *Config, name, field, key, value string) error {
 		return err
 	}
 	cfg.CustomProviders[name] = entry
+	return nil
+}
+
+func setPromptValue(cfg *Config, key, value string) error {
+	field := strings.TrimPrefix(key, "prompts.")
+	if field == "" {
+		return fmt.Errorf("invalid prompt key %q: expected prompts.<field>", key)
+	}
+	if cfg.Prompts == nil {
+		cfg.Prompts = &template.PromptsConfig{}
+	}
+	switch field {
+	case "main_task_system":
+		cfg.Prompts.MainTaskSystem = value
+	case "main_task_user":
+		cfg.Prompts.MainTaskUser = value
+	case "plan_task_system":
+		cfg.Prompts.PlanTaskSystem = value
+	case "plan_task_user":
+		cfg.Prompts.PlanTaskUser = value
+	case "memory_compression_task_system":
+		cfg.Prompts.MemoryCompressionTaskSystem = value
+	case "memory_compression_task_user":
+		cfg.Prompts.MemoryCompressionTaskUser = value
+	case "review_filter_task_system":
+		cfg.Prompts.ReviewFilterTaskSystem = value
+	case "review_filter_task_user":
+		cfg.Prompts.ReviewFilterTaskUser = value
+	case "re_location_task_system":
+		cfg.Prompts.ReLocationTaskSystem = value
+	case "re_location_task_user":
+		cfg.Prompts.ReLocationTaskUser = value
+	case "fast_mode_system":
+		cfg.Prompts.FastModeSystem = value
+	default:
+		return fmt.Errorf("unknown prompt field %q: supported fields are main_task_system, main_task_user, plan_task_system, plan_task_user, memory_compression_task_system, memory_compression_task_user, review_filter_task_system, review_filter_task_user, re_location_task_system, re_location_task_user, fast_mode_system", field)
+	}
 	return nil
 }
 

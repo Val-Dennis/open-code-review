@@ -16,6 +16,7 @@ import (
 	"github.com/open-code-review/open-code-review/internal/gitcmd"
 	"github.com/open-code-review/open-code-review/internal/llm"
 	"github.com/open-code-review/open-code-review/internal/model"
+	"github.com/open-code-review/open-code-review/internal/session"
 	"github.com/open-code-review/open-code-review/internal/stdout"
 	"github.com/open-code-review/open-code-review/internal/telemetry"
 	"github.com/open-code-review/open-code-review/internal/tool"
@@ -64,6 +65,9 @@ func runReview(args []string) error {
 		if opts.from == "" && rc.From != "" {
 			opts.from = rc.From
 		}
+		if opts.to == "" && rc.To != "" {
+			opts.to = rc.To
+		}
 		if opts.background == "" && rc.Background != "" {
 			opts.background = rc.Background
 		}
@@ -73,6 +77,9 @@ func runReview(args []string) error {
 		if opts.model == "" && llm.Model != "" {
 			opts.model = llm.Model
 		}
+	}
+	if opts.from != "" && opts.to == "" {
+		opts.to = "HEAD"
 	}
 
 	if err := validateReviewRefs(repoDir, opts); err != nil {
@@ -95,7 +102,7 @@ func runReview(args []string) error {
 	}
 
 	if opts.fast {
-		return runFastReview(repoDir, opts)
+		return runFastReview(repoDir, opts, tpl)
 	}
 
 	toolEntries, err := toolsconfig.Load(opts.toolConfigPath)
@@ -115,8 +122,18 @@ func runReview(args []string) error {
 		return fmt.Errorf("load app config: %w", err)
 	}
 	var lang string
+	var userPrompts *template.PromptsConfig
 	if appCfg != nil {
 		lang = appCfg.Language
+		userPrompts = appCfg.Prompts
+	}
+	var repoPrompts *template.PromptsConfig
+	if repoCfg != nil {
+		repoPrompts = repoCfg.Prompts
+	}
+	merged := template.MergePrompts(userPrompts, repoPrompts)
+	if err := tpl.ApplyPromptOverrides(merged, repoDir); err != nil {
+		return fmt.Errorf("apply prompt overrides: %w", err)
 	}
 	tpl.ApplyLanguage(lang)
 
@@ -344,7 +361,7 @@ func postToGitLabIfConfigured(comments []model.LlmComment, warnings []agent.Agen
 // runFastReview performs a lightweight review by sending the raw git diff to the
 // LLM in a single request. This is intended for small PRs where the full
 // multi-step agent review is unnecessary.
-func runFastReview(repoDir string, opts reviewOptions) error {
+func runFastReview(repoDir string, opts reviewOptions, tpl *template.Template) error {
 	ctx := context.Background()
 
 	// Load per-repo config and merge defaults (mirrors runReview).
@@ -357,6 +374,9 @@ func runFastReview(repoDir string, opts reviewOptions) error {
 		if opts.from == "" && rc.From != "" {
 			opts.from = rc.From
 		}
+		if opts.to == "" && rc.To != "" {
+			opts.to = rc.To
+		}
 		if opts.background == "" && rc.Background != "" {
 			opts.background = rc.Background
 		}
@@ -365,6 +385,9 @@ func runFastReview(repoDir string, opts reviewOptions) error {
 		if opts.model == "" && repoCfg.LLM.Model != "" {
 			opts.model = repoCfg.LLM.Model
 		}
+	}
+	if opts.from != "" && opts.to == "" {
+		opts.to = "HEAD"
 	}
 
 	// Load file filter (user include/exclude patterns) for consistent filtering
@@ -425,29 +448,67 @@ func runFastReview(repoDir string, opts reviewOptions) error {
 
 	llmClient := llm.NewLLMClient(ep)
 
-	systemPrompt := "You are an expert code reviewer. Review the following git diff and provide concise, actionable feedback. Focus on bugs, security issues, logic errors, and significant code quality problems. Skip minor style issues."
+	appCfg, err := LoadAppConfig(cfgPath)
+	if err != nil {
+		return fmt.Errorf("load app config: %w", err)
+	}
+	var userPrompts *template.PromptsConfig
+	if appCfg != nil {
+		userPrompts = appCfg.Prompts
+	}
+	var repoPrompts *template.PromptsConfig
+	if repoCfg != nil {
+		repoPrompts = repoCfg.Prompts
+	}
+	merged := template.MergePrompts(userPrompts, repoPrompts)
+	if err := tpl.ApplyPromptOverrides(merged, repoDir); err != nil {
+		return fmt.Errorf("apply prompt overrides: %w", err)
+	}
+
+	systemPrompt := tpl.FastTaskSystemPrompt()
 	if opts.background != "" {
 		systemPrompt += "\n\nContext: " + opts.background
 	}
 
 	userContent := "Please review the following git diff:\n\n```diff\n" + diffText + "\n```"
 
-	req := llm.ChatRequest{
-		Model: ep.Model,
-		Messages: []llm.Message{
-			llm.NewTextMessage("system", systemPrompt),
-			llm.NewTextMessage("user", userContent),
-		},
+	messages := []llm.Message{
+		llm.NewTextMessage("system", systemPrompt),
+		llm.NewTextMessage("user", userContent),
 	}
+
+	req := llm.ChatRequest{
+		Model:    ep.Model,
+		Messages: messages,
+	}
+
+	// Create session for persistence.
+	gitBranch := detectFastReviewBranch(repoDir)
+	reviewMode := fastReviewMode(opts)
+	sess := session.New(repoDir, gitBranch, ep.Model, session.SessionOptions{
+		ReviewMode: reviewMode,
+		DiffFrom:   opts.from,
+		DiffTo:     opts.to,
+		DiffCommit: opts.commit,
+	})
+	defer sess.Finalize()
+
+	filePath := "(fast-review)"
+	fs := sess.GetOrCreateFileSession(filePath)
+	taskRecord := fs.AppendTaskRecord(session.FastTask, messages)
 
 	if opts.audience != "agent" {
 		fmt.Println("[ocr] Running fast review...")
 	}
 
+	startTime := time.Now()
 	resp, err := llmClient.CompletionsWithCtx(ctx, req)
+	llmDuration := time.Since(startTime)
 	if err != nil {
+		taskRecord.SetError(err, llmDuration)
 		return fmt.Errorf("LLM request failed: %w", err)
 	}
+	taskRecord.SetResponse(resp, llmDuration)
 
 	content := resp.Content()
 	if content == "" {
@@ -466,6 +527,24 @@ func runFastReview(repoDir string, opts reviewOptions) error {
 	}
 
 	return nil
+}
+
+func detectFastReviewBranch(repoDir string) string {
+	out, err := runGitCmd(repoDir, "rev-parse", "--abbrev-ref", "HEAD")
+	if err != nil || len(out) == 0 {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
+func fastReviewMode(opts reviewOptions) string {
+	if opts.commit != "" {
+		return session.ReviewModeCommit
+	}
+	if opts.from != "" && opts.to != "" {
+		return session.ReviewModeRange
+	}
+	return session.ReviewModeWorkspace
 }
 
 func buildToolRegistry(collector *tool.CommentCollector, fr *tool.FileReader) *tool.Registry {

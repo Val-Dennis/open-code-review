@@ -18,6 +18,7 @@ type TaskType string
 const (
 	PlanTask              TaskType = "plan_task"
 	MainTask              TaskType = "main_task"
+	FastTask              TaskType = "fast_task"
 	MemoryCompressionTask TaskType = "memory_compression_task"
 	ReLocationTask        TaskType = "re_location_task"
 	ReviewFilterTask      TaskType = "review_filter_task"

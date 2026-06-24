@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/open-code-review/open-code-review/internal/config/template"
 )
 
 const (
@@ -17,10 +19,11 @@ const (
 
 // RepoConfig holds the per-repository configuration from .opencodereview/config.json.
 type RepoConfig struct {
-	Version string         `json:"version,omitempty"`
-	GitLab  *GitLabSection `json:"gitlab,omitempty"`
-	LLM     *LLMSection    `json:"llm,omitempty"`
-	Review  *ReviewSection `json:"review,omitempty"`
+	Version string                  `json:"version,omitempty"`
+	GitLab  *GitLabSection          `json:"gitlab,omitempty"`
+	LLM     *LLMSection             `json:"llm,omitempty"`
+	Review  *ReviewSection          `json:"review,omitempty"`
+	Prompts *template.PromptsConfig `json:"prompts,omitempty"`
 }
 
 // GitLabSection holds GitLab-specific config in .opencodereview/config.json.
@@ -43,6 +46,7 @@ type ReviewSection struct {
 	AutoPost   bool   `json:"auto_post,omitempty"`
 	MaxTools   int    `json:"max_tools,omitempty"`
 	From       string `json:"from,omitempty"`
+	To         string `json:"to,omitempty"`
 	Background string `json:"background,omitempty"`
 }
 

@@ -34,6 +34,12 @@
       { "role": "user", "prompt_file": "re_location_task_user.md" }
     ]
   },
+  "FAST_TASK": {
+    "timeout": 120,
+    "messages": [
+      { "role": "system", "prompt_file": "fast_task_system.md" }
+    ]
+  },
   "MAX_TOOL_REQUEST_TIMES": 30,
   "PLAN_MODE_LINE_THRESHOLD": 50,
   "MAX_TOKENS": 58888
