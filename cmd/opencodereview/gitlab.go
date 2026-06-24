@@ -64,6 +64,8 @@ func newGitLabClient(token, projectID, baseURL string) *gitlabClient {
 }
 
 // parseGitLabBaseURL extracts the GitLab instance base URL from a git remote URL.
+// HTTP(S) remotes keep host and port because that is the API endpoint.
+// SSH remotes drop the port.
 func parseGitLabBaseURL(remote string) string {
 	remote = strings.TrimSpace(remote)
 	if remote == "" {
@@ -78,7 +80,11 @@ func parseGitLabBaseURL(remote string) string {
 		if u.Scheme == "http" {
 			scheme = "http"
 		}
-		return fmt.Sprintf("%s://%s", scheme, u.Host)
+		host := u.Host
+		if u.Scheme == "ssh" {
+			host = u.Hostname()
+		}
+		return fmt.Sprintf("%s://%s", scheme, host)
 	}
 	if m := scpStyleSSHHost.FindStringSubmatch(remote); len(m) > 1 {
 		return fmt.Sprintf("https://%s", m[1])

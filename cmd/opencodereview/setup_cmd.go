@@ -15,10 +15,10 @@ func printSetupUsage() {
 Configure GitLab integration for the current repository.
 
 Writes .opencodereview/config.json (adds it to .gitignore) with:
-  - GitLab URL (auto-detected from git remote)
+  - GitLab URL (detected from git remote; confirm or override at setup)
   - Project ID (auto-detected from git remote)
   - GitLab project token (auto-provisioned via PAT or prompted)
-  - Review defaults (auto-post, max tools, diff source branch)
+  - Review defaults (auto-post, max tools, diff source branch; Enter accepts each default)
 
 Flags:
   --repo string   root directory of the git repository (default: current dir)
@@ -68,9 +68,9 @@ func runSetup(args []string) error {
 		fmt.Fprintf(stdout.Writer(), "Detected project: %s\n", projectID)
 	}
 
-	gitlabURL := detectGitLabURL(repoDir)
-	if gitlabURL != "" {
-		fmt.Fprintf(stdout.Writer(), "Detected GitLab URL: %s\n", gitlabURL)
+	gitlabURL, err := promptGitLabAPIURL(repoDir)
+	if err != nil {
+		return err
 	}
 
 	token := ""
@@ -93,13 +93,11 @@ func runSetup(args []string) error {
 		}
 	}
 
-	fmt.Fprintln(os.Stderr, "\nReview defaults (press Enter to skip):")
-	autoPost := promptBool("Auto-post after review? [Y/n]: ", true)
-	maxTools := promptInt("Max tool calls per file [15]: ", 15)
-	fromBranch := promptInput("Default diff source branch [origin/main]: ")
-	if fromBranch == "" {
-		fromBranch = "origin/main"
-	}
+	fmt.Fprintln(os.Stderr, "\nReview defaults:")
+	fmt.Fprintln(os.Stderr, "Press Enter at each prompt to accept the default.")
+	autoPost := promptBool("Auto-post after review? [Y/n, default: yes]: ", true)
+	maxTools := promptInt("Max tool calls per file [default: 15]: ", 15)
+	fromBranch := promptStringDefault("Default diff source branch", "origin/main")
 
 	cfg := &RepoConfig{
 		GitLab: &GitLabSection{
@@ -151,6 +149,36 @@ func tryAutoProvision(gitlabURL, projectID string) string {
 
 	fmt.Fprintf(os.Stderr, "[ocr] Created project-scoped token\n")
 	return token
+}
+
+// promptGitLabAPIURL detects the GitLab API base URL from origin and lets the user confirm or override it.
+// SSH git remotes often use a non-HTTPS port or a different hostname than the web UI; override when prompted.
+func promptGitLabAPIURL(repoDir string) (string, error) {
+	detected := detectGitLabURL(repoDir)
+	if detected != "" {
+		fmt.Fprintf(stdout.Writer(), "Detected GitLab API URL from git remote: %s\n", detected)
+		fmt.Fprintln(os.Stderr, "Press Enter to use the detected URL, or type a different GitLab API base URL.")
+		entered := promptInput(fmt.Sprintf("GitLab API base URL [%s]: ", detected))
+		if entered != "" {
+			return strings.TrimRight(entered, "/"), nil
+		}
+		return detected, nil
+	}
+
+	fmt.Fprintln(os.Stderr, "Could not detect GitLab API URL from git remote.")
+	entered := strings.TrimRight(promptInput("GitLab API base URL (required, e.g. https://gitlab.com): "), "/")
+	if entered == "" {
+		return "", fmt.Errorf("GitLab API base URL is required")
+	}
+	return entered, nil
+}
+
+func promptStringDefault(label, defaultVal string) string {
+	entered := promptInput(fmt.Sprintf("%s [default: %s]: ", label, defaultVal))
+	if entered == "" {
+		return defaultVal
+	}
+	return entered
 }
 
 func promptInput(prompt string) string {
