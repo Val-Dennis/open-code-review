@@ -39,9 +39,9 @@ var cacheReadTokensPaths = []string{
 }
 
 var cacheWriteTokensPaths = []string{
-	"usage.cache_creation_input_tokens",      // Anthropic / proxy
-	"cache_creation_input_tokens",            // flat at root
-	"data.usage.cache_creation_input_tokens", // wrapped Anthropic-compatible proxy
+	"usage.cache_creation_input_tokens",                      // Anthropic / proxy
+	"cache_creation_input_tokens",                            // flat at root
+	"data.usage.cache_creation_input_tokens",                 // wrapped Anthropic-compatible proxy
 	"usage.prompt_tokens_details.cache_creation_tokens",      // OpenAI-compatible providers
 	"data.usage.prompt_tokens_details.cache_creation_tokens", // wrapped OpenAI-compatible providers
 }
