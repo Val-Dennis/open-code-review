@@ -32,9 +32,7 @@ var cacheReadTokensPaths = []string{
 	"data.usage.cache_read_input_tokens",             // wrapped Anthropic-compatible proxy
 	"usage.prompt_tokens_details.cached_tokens",      // OpenAI-compatible providers
 	"data.usage.prompt_tokens_details.cached_tokens", // wrapped OpenAI-compatible providers
-	"usage.prompt_tokens_details.cache_tokens_hit",   // some providers
-	"data.usage.prompt_tokens_details.cache_tokens_hit",
-	"usage.prompt_tokens_details.cache_tokens", // some providers
+	"usage.prompt_tokens_details.cache_tokens",        // Baidu Qianfan (ERNIE)
 	"data.usage.prompt_tokens_details.cache_tokens",
 }
 
@@ -42,8 +40,8 @@ var cacheWriteTokensPaths = []string{
 	"usage.cache_creation_input_tokens",                      // Anthropic / proxy
 	"cache_creation_input_tokens",                            // flat at root
 	"data.usage.cache_creation_input_tokens",                 // wrapped Anthropic-compatible proxy
-	"usage.prompt_tokens_details.cache_creation_tokens",      // OpenAI-compatible providers
-	"data.usage.prompt_tokens_details.cache_creation_tokens", // wrapped OpenAI-compatible providers
+	"usage.prompt_tokens_details.cache_creation_tokens",      // ApexRoute / LLM Gateway — proxy normalization of Anthropic cache_creation_input_tokens
+	"data.usage.prompt_tokens_details.cache_creation_tokens", // wrapped proxy normalization
 }
 
 // anthropicCacheReadPathCount is the number of Anthropic-style cache read paths
@@ -61,7 +59,7 @@ const anthropicCacheWritePathCount = 3
 var totalTokensPaths = []string{
 	"usage.total_tokens",      // OpenAI standard
 	"total_tokens",            // flat at root
-	"data.usage.total_tokens", // wrapped in data layer (some proxy APIs)
+	"data.usage.total_tokens", // wrapped in data layer
 }
 
 // resolveUsage parses raw JSON bytes into a map and extracts token usage
