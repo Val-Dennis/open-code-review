@@ -32,8 +32,6 @@ var cacheReadTokensPaths = []string{
 	"data.usage.cache_read_input_tokens",             // wrapped Anthropic-compatible proxy
 	"usage.prompt_tokens_details.cached_tokens",      // OpenAI-compatible providers
 	"data.usage.prompt_tokens_details.cached_tokens", // wrapped OpenAI-compatible providers
-	"usage.prompt_tokens_details.cache_tokens",        // Baidu Qianfan (ERNIE)
-	"data.usage.prompt_tokens_details.cache_tokens",
 }
 
 var cacheWriteTokensPaths = []string{
